@@ -179,8 +179,7 @@ def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
                 ns = element_node_IDs(x,y,z)
                 if ns is None: 
                     continue
-                part = part_expl if is_expl(x,y,z) else part_nonexpl
-                elements.append([part, *ns])
+                elements.append([part_nonexpl, *ns])
 
     #Region to the right of explosive region
     for y in range(0, yf):
@@ -193,8 +192,7 @@ def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
                 ns = element_node_IDs(x,y,z)
                 if ns is None: 
                     continue
-                part = part_expl if is_expl(x,y,z) else part_nonexpl
-                elements.append([part, *ns])
+                elements.append([part_nonexpl, *ns])
 
     #Region above cutout
     if yf_cutout < yf and xi_cutout_offset < xf:
@@ -204,8 +202,7 @@ def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
                     ns = element_node_IDs(x,y,z)
                     if ns is None:
                         continue
-                    part = part_expl if is_expl(x,y,z) else part_nonexpl
-                    elements.append([part, *ns])
+                    elements.append([part_nonexpl, *ns])
 
     elements = np.array(elements, dtype=int)
     element_IDs = np.arange(1, elements.shape[0]+1).reshape(-1, 1)  #generate column of element IDs
@@ -262,5 +259,6 @@ if __name__ == '__main__':
         for group in fixed_coords_input.split(','):
             coord = tuple(map(float, group.strip().split()))
             fixed_coords.append(coord)
+
 
     main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, expl_dims, fixed_coords)
