@@ -14,6 +14,11 @@ def generate_nodes(element_size, outer_dims, expl_dims, cutout_dims, cutout_offs
     yf_cutout = cutout_dims[1]
     tol = 1e-10
     nodes = []
+    
+    #If there is no cutout specified
+    if np.allclose(cutout_dims, 0) and np.allclose(cutout_offset, 0):
+        xi_cutout_offset = xf
+        yf_cutout = yf
 
     #Check that there are an integer # of elements in the explosive region
     nx_expl = xf_expl/element_size
@@ -107,6 +112,11 @@ def add_constraints(nodes, outer_dims, cutout_dims, cutout_offset, fixed_coords)
     tc = np.full((coords.shape[0],), 3)  #fill tc column with tc=3 (constrained in z disp) - will be updated
     rc = np.full((coords.shape[0],), 7)  #fill rc column with rc=7 (constrained in xyz rot) - won't touch
 
+    #If there is no cutout specified
+    if np.allclose(cutout_dims, 0) and np.allclose(cutout_offset, 0):
+        xi_cutout_offset = xf
+        yf_cutout = yf
+
     for i, (x,y,z) in enumerate(coords):
         #if node is on outer edges parallel to x axis but that are not the top edges
         if np.isclose(y,0) or np.isclose(y,yf_cutout) and x > xi_cutout_offset and not np.isclose(y,yf):
@@ -137,6 +147,11 @@ def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
     part_nonexpl = 1    #part ID of the non-explosive region
     part_expl = 2
     elements = []
+
+    #If there is no cutout specified
+    if np.allclose(cutout_dims, 0) and np.allclose(cutout_offset, 0):
+        xi_cutout_offset = xf
+        yf_cutout = yf
 
     #Dictionary to map coordinates to node IDs
     IDs = nodes[:,0].astype(int)
@@ -259,6 +274,5 @@ if __name__ == '__main__':
         for group in fixed_coords_input.split(','):
             coord = tuple(map(float, group.strip().split()))
             fixed_coords.append(coord)
-
 
     main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, expl_dims, fixed_coords)
