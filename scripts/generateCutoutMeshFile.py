@@ -1,6 +1,6 @@
 # Script to generate the mesh file for a mesh with a cutout region; see https://lsdyna.ansys.com/underwater-f/ for an example
 # Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1, bottom edge of cutout region is on the x axis,
-# inputs except element_size are integers
+# inputs except element_size are integers, part ID of non-explosive is 1 and ID of explosive is 2
 # Haena Lee, July 2025
 
 import numpy as np
@@ -276,3 +276,4 @@ if __name__ == '__main__':
             fixed_coords.append(coord)
 
     main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, expl_dims, fixed_coords)
+
