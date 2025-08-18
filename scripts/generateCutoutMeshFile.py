@@ -4,6 +4,7 @@
 # Haena Lee, July 2025
 
 import numpy as np
+import os
 
 #HELPER FUNCTIONS
 #Generate the node IDs and coordinates; ordered in the same manner as in 'fine.inc'
@@ -139,7 +140,7 @@ def add_constraints(nodes, outer_dims, cutout_dims, cutout_offset, fixed_coords)
 
 
 #Generate the hexahedral elements; ordered in the same manner as in 'fine.inc'
-def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
+def generate_elements(nodes, element_size, outer_dims, expl_dims, cutout_dims, cutout_offset):
     xf, yf, zf = map(int, outer_dims)
     xf_expl, yf_expl, zf_expl = map(int, expl_dims)
     yf_cutout = int(cutout_dims[1])
@@ -153,81 +154,108 @@ def generate_elements(nodes, outer_dims, expl_dims, cutout_dims, cutout_offset):
         xi_cutout_offset = xf
         yf_cutout = yf
 
-    #Dictionary to map coordinates to node IDs
-    IDs = nodes[:,0].astype(int)
-    coords = np.round(nodes[:,1:4].astype(float), 9)   #round all coordinates to 9 decimal places
-    coords_to_id = {}
-    for nodeID, xyz in zip(IDs, coords):
-        x, y, z = xyz
-        key = (x, y, z)
-        coords_to_id[key] = int(nodeID)
+    #Create node ID map with columns: node ID, x, y, z
+    nodes = np.asarray(nodes)
+    ids = nodes[:,0].astype(int)
+    xs = nodes[:,1].astype(float)
+    ys = nodes[:,2].astype(float)
+    zs = nodes[:,3].astype(float)
 
+    #Convert physical coordinates to integer grid indices (i,j,k) based on element size.
+    scale = 1.0/float(element_size)     #multiply by this instead of dividing to prevent floating pt errors
+    tol = 1e-10
+    ix = np.rint(xs*scale+tol).astype(int)
+    iy = np.rint(ys*scale+tol).astype(int)
+    iz = np.rint(zs*scale+tol).astype(int)
+    indices = np.stack([ix, iy, iz], axis=1)
+    
+    #Dictionary to get node ID from integer indices
+    index_to_id = {}
+    for idx, nid in zip(indices, ids):
+        key = (int(idx[0]), int(idx[1]), int(idx[2]))
+        index_to_id[key] = int(nid)
+
+    def nid(i,j,k):
+        return index_to_id[(i,j,k)]   #corresponding node ID for the integer indices
+
+    #Convert lengths to grid indices, rounding to nearest int
+    #E.g., if xf = 100 and element_size = 0.5, to_index(100) -> 200.
+    def to_index(L):
+        return int(round(L/element_size))
+    nxf = to_index(xf)
+    nyf = to_index(yf)
+    nzf = to_index(zf)
+    nxf_e = to_index(xf_expl)
+    nyf_e = to_index(yf_expl)
+    nzf_e = to_index(zf_expl)
+    nxi_c_o = to_index(xi_cutout_offset)
+    nyf_c = to_index(yf_cutout)
 
     #Define the 8 vertices of each element and return their corresponding node IDs
     def element_node_IDs(i,j,k):
-        vertices = [
-            (i,j,k), (i+1,j,k), (i+1,j+1,k), (i,j+1,k),
-            (i,j,k+1), (i+1,j,k+1), (i+1,j+1,k+1), (i,j+1,k+1),
-        ]
-        try:
-            return [coords_to_id[v] for v in vertices]   #try finding the node ID for each vertex
+        try:        #try finding the node ID for each vertex
+            return [
+                nid(i,j,k), nid(i+1,j,k), nid(i+1,j+1,k), nid(i,j+1,k),
+                nid(i,j,k+1), nid(i+1,j,k+1), nid(i+1,j+1,k+1), nid(i,j+1,k+1)
+            ]
         except KeyError:
             return None
 
-    #Check if element is in the explosive region
-    def is_expl(x,y,z):
-        return (0 <= x < xf_expl) and (0 <= y < yf_expl) and (0 <= z < zf_expl)
-
     #Explosive region, including boundaries
-    for z in range(zf_expl):
-        for y in range(yf_expl):
-            for x in range(xf_expl):
+    for z in range(nzf_e):
+        for y in range(nyf_e):
+            for x in range(nxf_e):
                 ns = element_node_IDs(x,y,z)    #get the node IDs at the 8 vertices
                 if ns is None:      #if any of the nodes at the vertices don't exist
                     continue
                 elements.append([part_expl, *ns])
 
     #Region above explosive region
-    for y in range(yf_expl, yf):
-        for x in range(0, xf_expl):
-            for z in range(0, zf_expl):
+    for z in range(nzf):
+        for y in range(nyf_e, nyf):
+            for x in range(0, nxf_e):
                 ns = element_node_IDs(x,y,z)
                 if ns is None: 
                     continue
                 elements.append([part_nonexpl, *ns])
 
     #Region to the right of explosive region
-    for y in range(0, yf):
-        x_start = xf_expl
-        x_end = xf-1
-        if y >= yf_cutout:
-            x_end = max(xf_expl-1, xi_cutout_offset-1)  # stop before cutout columns
-        for x in range(x_start, x_end+1):
-            for z in range(0, zf):
-                ns = element_node_IDs(x,y,z)
-                if ns is None: 
-                    continue
-                elements.append([part_nonexpl, *ns])
+    if np.allclose(cutout_dims, 0) and np.allclose(cutout_offset, 0):   #If there is no cutout specified
+        # Simple rectangular block to the right
+        for z in range(nzf):
+            for y in range(0, nyf):
+                for x in range(nxf_e, nxf):
+                    ns = element_node_IDs(x,y,z)
+                    if ns: elements.append([part_nonexpl, *ns])
+    else:
+        # With cutout: truncate the right block for rows j >= nyf_c
+        for z in range(nzf):
+            for y in range(0, nyf):
+                x_start = nxf_e
+                x_end = nxf-1
+                if y >= nyf_c:
+                    x_end = max(nxf_e-1, nxi_c_o-1)  # stop before cutout columns
+                for x in range(x_start, x_end+1):
+                    ns = element_node_IDs(x,y,z)
+                    if ns: elements.append([part_nonexpl, *ns])
 
     #Region above cutout
-    if yf_cutout < yf and xi_cutout_offset < xf:
-        for y in range(yf_cutout, yf):
-            for x in range(xi_cutout_offset, xf):
-                for z in range(0, zf):
+    if nyf_c < nyf and nxi_c_o < nxf:
+        for z in range(nzf):
+            for y in range(nyf_c, nyf):
+                for x in range(nxi_c_o, nxf):
                     ns = element_node_IDs(x,y,z)
-                    if ns is None:
-                        continue
-                    elements.append([part_nonexpl, *ns])
+                    if ns: elements.append([part_nonexpl, *ns])
 
-    elements = np.array(elements, dtype=int)
-    element_IDs = np.arange(1, elements.shape[0]+1).reshape(-1, 1)  #generate column of element IDs
+    elements = np.asarray(elements, dtype=int)
+    element_IDs = np.arange(1, elements.shape[0]+1, dtype=int).reshape(-1, 1)  #generate column of element IDs
     elements = np.hstack((element_IDs, elements))
     return elements
 
 
 #Format the node and element sections into the output file, in the same manner as 'fine.inc'
-def format_sections_into_file(node_section, element_section, output_filename):
-    with open(output_filename, "w") as f:
+def format_sections_into_file(node_section, element_section, output_path):
+    with open(output_path, "w") as f:
         f.write("*NODE\n")
         for row in node_section:
             node_id = int(row[0])
@@ -249,9 +277,11 @@ def format_sections_into_file(node_section, element_section, output_filename):
 def main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, expl_dims, fixed_coords):
     nodes = generate_nodes(element_size, outer_dims, expl_dims, cutout_dims, cutout_offset)
     node_section = add_constraints(nodes, outer_dims, cutout_dims, cutout_offset, fixed_coords)
-    element_section = generate_elements(node_section, outer_dims, expl_dims, cutout_dims, cutout_offset)
+    element_section = generate_elements(node_section, element_size, outer_dims, expl_dims, cutout_dims, cutout_offset)
 
-    format_sections_into_file(node_section, element_section, output_filename)
+    script_dir = os.path.dirname(os.path.abspath(__file__))     #directory of this script
+    output_path = os.path.join(script_dir, output_filename)
+    format_sections_into_file(node_section, element_section, output_path)
     print(f"Mesh written to {output_filename}.")
 
 
@@ -276,4 +306,3 @@ if __name__ == '__main__':
             fixed_coords.append(coord)
 
     main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, expl_dims, fixed_coords)
-
