@@ -243,7 +243,7 @@ def format_sections_into_file(node_section, element_section, sensor_elements, se
             f.write(f"{int(sensor_set_id)}\n")
             line = []
             for i, eid in enumerate(sensor_elements, 1):
-                line.append(f"{int(eid):8d}")
+                line.append(f"{int(eid):10d}")
                 if i % 10 == 0:
                     f.write("".join(line) + "\n")
                     line = []
@@ -286,5 +286,6 @@ if __name__ == '__main__':
 
     sensor_offset = float(input("Enter the number of elements to offset the sensor elements by from the top and right boundaries (e.g., 1): "))
     sensor_set_id = float(input("Enter sensor element set ID (e.g., 9001): "))
+
 
     main(output_filename, element_size, outer_dims, expl_dims, fixed_coords, sensor_offset, sensor_set_id)
