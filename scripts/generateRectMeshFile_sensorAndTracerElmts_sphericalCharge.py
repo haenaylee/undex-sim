@@ -146,27 +146,6 @@ def generate_elements(nodes, element_size, outer_dims, expl_radius):
                 if dist_sq <= (expl_radius + tol)**2:
                     part = part_expl
                 else:
-                    # It's possible that lower-left corner is outside but some other part lies inside
-                    # e.g., if lower-left outside but bottom edge or left edge intersects the circle.
-                    # We do a slightly more robust check: check the four corners' distances and
-                    # also check if the circle radius intersects any side:
-                    #corner_coords = [
-                    #    (x_min, y_min),
-                    #    (x_min + es, y_min),
-                    #    (x_min, y_min + es),
-                    #    (x_min + es, y_min + es)
-                    #]
-                    #corners_inside = any((cx * cx + cy * cy) <= (expl_radius + 1e-12) ** 2 for cx, cy in corner_coords)
-                    #if corners_inside:
-                    #    part = part_expl
-                    #else:
-                    #    # conservative check: sample a few points inside the element footprint (center)
-                    #    cx = x_min + 0.5 * es
-                    #    cy = y_min + 0.5 * es
-                    #    if (cx * cx + cy * cy) <= (expl_radius + 1e-12) ** 2:
-                    #        part = part_expl
-                    #    else:
-                    #        part = part_nonexpl
                     part = part_nonexpl
                 elements.append([part, *ns])
 
@@ -176,7 +155,8 @@ def generate_elements(nodes, element_size, outer_dims, expl_radius):
     return elements
 
 
-#Return the sensor elements offset from the top and right boundaries by the # of elements specified by sensor_offset; assuming region's thickness is z=1
+#Return the upper leftmost and lower rightmost sensor elements, offset from the top and right boundaries by the # of elements specified by sensor_offset;
+#assuming region's thickness is z=1
 def define_sensor_elements(node_section, element_section, element_size, outer_dims, sensor_offset):
     xf, yf, _ = map(float, outer_dims)
     es = float(element_size)
@@ -193,7 +173,9 @@ def define_sensor_elements(node_section, element_section, element_size, outer_di
         node_id = int(row[0])
         nodeID_to_coords[node_id] = tuple(map(float, row[1:4]))
 
-    sensor_elements = set()      #use set to avoid duplicate elements (e.g., the one where the row and column intersect)
+    all_sensor_elements = set()      #use set to avoid duplicate elements (e.g., the one where the row and column intersect)
+                                     #eid, min_x, max_x, min_y, max_y, on_row, on_col
+    sensor_elements = set()
     tol = 1e-10
 
     for row in element_section:
@@ -202,11 +184,20 @@ def define_sensor_elements(node_section, element_section, element_size, outer_di
         x_coords = [nodeID_to_coords[n][0] for n in nids]
         y_coords = [nodeID_to_coords[n][1] for n in nids]
 
-        on_sensor_row = abs(max(y_coords) - sensor_y_coord) <= tol
-        on_sensor_col = abs(max(x_coords) - sensor_x_coord) <= tol
+        min_x, max_x = min(x_coords), max(x_coords)
+        min_y, max_y = min(y_coords), max(y_coords)
+
+        on_sensor_row = abs(max_y - sensor_y_coord) <= tol
+        on_sensor_col = abs(max_x - sensor_x_coord) <= tol
 
         if on_sensor_row or on_sensor_col:
-            sensor_elements.add(eid)
+            all_sensor_elements.add((eid, min_x, max_x, min_y, max_y, on_sensor_row, on_sensor_col))
+
+    #get the upper leftmost and lower rightmost sensor elements
+    sensors_in_row = [r for r in all_sensor_elements if r[5]]
+    top_left = min(all_sensor_elements, key=lambda r: (r[1], -r[4]))        #highest y then lowest x
+    bottom_right = min(all_sensor_elements, key=lambda c: (c[3], -c[2]))    #lowest y then highest x
+    sensor_elements = {top_left[0], bottom_right[0]}
 
     return sensor_elements
 
