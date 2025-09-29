@@ -1,22 +1,21 @@
-# Script to generate the mesh file for a rectangular mesh with sensor and tracer elements for automatic simulation termination
-# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1, inputs except element_size are integers, 
+# Script to generate the mesh file for a rectangular mesh and quarter-spherical charge with sensor and tracer elements for automatic simulation termination
+# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1, inputs except element_size and expl_radius are integers, 
 # part ID of non-explosive is 1 and ID of explosive is 2, region is rectangular
-# Haena Lee, August 2025
+# Haena Lee, Sept 2025
 
 import numpy as np
 import os
 
 #HELPER FUNCTIONS
-#Generate the node IDs and coordinates; ordered in the same manner as in 'fine.inc'
-def generate_nodes(element_size, outer_dims, expl_dims):
+#Generate the node IDs and coordinates; NOT ordered in the same manner as in 'fine.inc'
+def generate_nodes(element_size, outer_dims):
     xf, yf, zf = outer_dims
-    xf_expl, yf_expl, zf_expl = expl_dims
     tol = 1e-10
     nodes = []
 
-    #Check that there are an integer # of elements in the explosive region
-    nx_expl = xf_expl/element_size
-    ny_expl = yf_expl/element_size
+    #Check that there are an integer # of elements in the entire region
+    nx_expl = outer_dims[0]/element_size
+    ny_expl = outer_dims[1]/element_size
 
     def is_int(x):  #check if x is an integer within tolerance
         return abs(x-round(x)) <= tol
@@ -24,8 +23,8 @@ def generate_nodes(element_size, outer_dims, expl_dims):
     if not (is_int(nx_expl) and is_int(ny_expl)):   #if there's not an integer # of elements
         print(
             f"There are {nx_expl:.2f} elements in the x dimension and "
-            f"{ny_expl:.2f} elements in the y dimension of the explosive region.\n"
-            "Please choose a different element size or explosive dimensions."
+            f"{ny_expl:.2f} elements in the y dimension of the entire region.\n"
+            "Please choose a different element size or outer dimensions."
         )
         return None     #quit early
 
@@ -35,37 +34,20 @@ def generate_nodes(element_size, outer_dims, expl_dims):
     nxf = to_index(xf)
     nyf = to_index(yf)
     nzf = to_index(zf)
-    nxf_e = to_index(xf_expl)
-    nyf_e = to_index(yf_expl)
-    nzf_e = to_index(zf_expl)
 
     def add_node(xi,yi,zi):
         #append coordinates scaled by element_size
         nodes.append((xi*element_size, yi*element_size, zi*element_size))
 
-    #Explosive region, including boundaries
-    for z in range(nzf_e+1):
-        for y in range(nyf_e+1):
-            for x in range(nxf_e+1):
-                add_node(x,y,z)
-
-    #Region above explosive region
-    for z in range(nzf+1):
-        for y in range(nyf_e+1, nyf+1):
-            for x in range(0, nxf_e+1):
-                add_node(x,y,z)
-
-    #Region to the right of explosive region
-    for z in range(nzf+1):
-        for y in range(0, nyf_e+1):
-            for x in range(nxf_e+1, nxf+1):
-                add_node(x,y,z)
-
-    #Region above
-    for z in range(nzf+1):
-        for y in range(nyf_e+1, nyf+1):
-            for x in range(nxf_e+1, nxf+1):
-                add_node(x,y,z)
+    #generate nodes for the entire region, in increasing x, y, z order
+    nodes = []
+    for k in range(nzf+1):
+        for j in range(nyf+1):
+            for i in range(nxf+1):
+                x = i * element_size
+                y = j * element_size
+                z = k * element_size
+                nodes.append((x,y,z))
 
     nodes = np.array(nodes, dtype=float)
     node_IDs = np.arange(1, nodes.shape[0]+1).reshape(-1, 1)    #generate column of node IDs
@@ -101,10 +83,9 @@ def add_constraints(nodes, outer_dims, fixed_coords):
     return nodes
 
 
-#Generate the hexahedral elements; ordered in the same manner as in 'fine.inc'
-def generate_elements(nodes, element_size, outer_dims, expl_dims):
+#Generate the hexahedral elements; NOT ordered in the same manner as in 'fine.inc'
+def generate_elements(nodes, element_size, outer_dims, expl_radius):
     xf, yf, zf = map(int, outer_dims)
-    xf_expl, yf_expl, zf_expl = map(int, expl_dims)
     part_nonexpl = 1    #part ID of the non-explosive region
     part_expl = 2
     elements = []
@@ -140,9 +121,6 @@ def generate_elements(nodes, element_size, outer_dims, expl_dims):
     nxf = to_index(xf)
     nyf = to_index(yf)
     nzf = to_index(zf)
-    nxf_e = to_index(xf_expl)
-    nyf_e = to_index(yf_expl)
-    nzf_e = to_index(zf_expl)
 
     #Define the 8 vertices of each element and return their corresponding node IDs
     def element_node_IDs(i,j,k):
@@ -154,30 +132,43 @@ def generate_elements(nodes, element_size, outer_dims, expl_dims):
         except KeyError:
             return None
 
-    #Explosive region, including boundaries
-    for z in range(nzf_e):
-        for y in range(nyf_e):
-            for x in range(nxf_e):
-                ns = element_node_IDs(x,y,z)    #get the node IDs at the 8 vertices
-                if ns is None:      #if any of the nodes at the vertices don't exist
+    #if the x and y coordinates of the midpoint of the element are within expl_radius, set element as explosive element
+    for k in range(nzf):
+        for j in range(nyf):
+            for i in range(nxf):
+                ns = element_node_IDs(i,j,k)
+                if ns is None:
                     continue
-                elements.append([part_expl, *ns])
-
-    #Region above explosive region
-    for z in range(nzf):
-        for y in range(nyf_e, nyf):
-            for x in range(0, nxf_e):
-                ns = element_node_IDs(x,y,z)
-                if ns is None: 
-                    continue
-                elements.append([part_nonexpl, *ns])
-
-    #Region to the right of explosive region
-    for z in range(nzf):
-        for y in range(0, nyf):
-            for x in range(nxf_e, nxf):
-                ns = element_node_IDs(x,y,z)
-                if ns: elements.append([part_nonexpl, *ns])
+                #get coords of lower left corner and add half the element size to get midpoint coords
+                x_mid = (i*element_size) + (0.5*element_size)
+                y_mid = (j*element_size) + (0.5*element_size)
+                dist_sq = x_mid**2 + y_mid**2
+                if dist_sq <= (expl_radius + tol)**2:
+                    part = part_expl
+                else:
+                    # It's possible that lower-left corner is outside but some other part lies inside
+                    # e.g., if lower-left outside but bottom edge or left edge intersects the circle.
+                    # We do a slightly more robust check: check the four corners' distances and
+                    # also check if the circle radius intersects any side:
+                    #corner_coords = [
+                    #    (x_min, y_min),
+                    #    (x_min + es, y_min),
+                    #    (x_min, y_min + es),
+                    #    (x_min + es, y_min + es)
+                    #]
+                    #corners_inside = any((cx * cx + cy * cy) <= (expl_radius + 1e-12) ** 2 for cx, cy in corner_coords)
+                    #if corners_inside:
+                    #    part = part_expl
+                    #else:
+                    #    # conservative check: sample a few points inside the element footprint (center)
+                    #    cx = x_min + 0.5 * es
+                    #    cy = y_min + 0.5 * es
+                    #    if (cx * cx + cy * cy) <= (expl_radius + 1e-12) ** 2:
+                    #        part = part_expl
+                    #    else:
+                    #        part = part_nonexpl
+                    part = part_nonexpl
+                elements.append([part, *ns])
 
     elements = np.asarray(elements, dtype=int)
     element_IDs = np.arange(1, elements.shape[0]+1, dtype=int).reshape(-1, 1)  #generate column of element IDs
@@ -311,10 +302,10 @@ def format_sections_into_file(node_section, element_section, sensor_elements, se
 
 
 #MAIN
-def main(output_filename, element_size, outer_dims, expl_dims, fixed_coords, sensor_offset, sensor_set_id, tracer_elset_id, tracer_nset_id):
-    nodes = generate_nodes(element_size, outer_dims, expl_dims)
+def main(output_filename, element_size, outer_dims, expl_radius, fixed_coords, sensor_offset, sensor_set_id, tracer_elset_id, tracer_nset_id):
+    nodes = generate_nodes(element_size, outer_dims)
     node_section = add_constraints(nodes, outer_dims, fixed_coords)
-    element_section = generate_elements(node_section, element_size, outer_dims, expl_dims)
+    element_section = generate_elements(node_section, element_size, outer_dims, expl_radius)
     sensor_elements = define_sensor_elements(node_section, element_section, element_size, outer_dims, sensor_offset)
     tracer_elements = define_tracer_elements(node_section, element_section)
     tracer_nodes = define_tracer_nodes(element_section, tracer_elements)
@@ -335,7 +326,7 @@ if __name__ == '__main__':
         return tuple(map(float, input(prompt).strip().split()))
 
     outer_dims = get_tuple("Enter outer region dimensions (e.g., 32 32 1): ")
-    expl_dims = get_tuple("Enter explosive region dimensions (e.g., 8 8 1): ")
+    expl_radius = float(input("Enter radius of spherical explosive charge: "))
 
     fixed_coords = []
     fixed_coords_input = input("Enter fixed node coordinates, separated by commas (e.g., 0 0 0, 0 0 1): ").strip()
@@ -350,4 +341,4 @@ if __name__ == '__main__':
     tracer_elset_id = float(input("Enter tracer element set ID (e.g., 7001): "))
     tracer_nset_id = float(input("Enter tracer node set ID (e.g., 7101): "))
 
-    main(output_filename, element_size, outer_dims, expl_dims, fixed_coords, sensor_offset, sensor_set_id, tracer_elset_id, tracer_nset_id)
+    main(output_filename, element_size, outer_dims, expl_radius, fixed_coords, sensor_offset, sensor_set_id, tracer_elset_id, tracer_nset_id)
