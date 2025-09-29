@@ -185,50 +185,38 @@ def generate_elements(nodes, element_size, outer_dims, expl_dims):
     return elements
 
 
-#Return the upper leftmost and lower rightmost sensor elements, offset from the top and right boundaries by the # of elements specified by sensor_offset;
-#assuming region's thickness is z=1
-def define_sensor_elements(node_section, element_section, element_size, outer_dims, sensor_offset):
-    xf, yf, _ = map(float, outer_dims)
-    es = float(element_size)
-    nxf = int(round(xf/es))
-    nyf = int(round(yf/es))
-
-    #X and y coordinates of the top and right edges of the sensor elements
-    sensor_y_coord = (nyf-sensor_offset) * es
-    sensor_x_coord = (nxf-sensor_offset) * es
-
-    #Dictionary to get coordinates from node IDs
-    nodeID_to_coords = {}
-    for row in node_section:
-        node_id = int(row[0])
-        nodeID_to_coords[node_id] = tuple(map(float, row[1:4]))
-
-    all_sensor_elements = set()      #use set to avoid duplicate elements (e.g., the one where the row and column intersect)
-                                     #eid, min_x, max_x, min_y, max_y, on_row, on_col
-    sensor_elements = set()
-    tol = 1e-10
-
-    for row in element_section:
-        eid = int(row[0])
-        nids = [int(v) for v in row[2:10]]
-        x_coords = [nodeID_to_coords[n][0] for n in nids]
-        y_coords = [nodeID_to_coords[n][1] for n in nids]
-
-        min_x, max_x = min(x_coords), max(x_coords)
-        min_y, max_y = min(y_coords), max(y_coords)
-
-        on_sensor_row = abs(max_y - sensor_y_coord) <= tol
-        on_sensor_col = abs(max_x - sensor_x_coord) <= tol
-
-        if on_sensor_row or on_sensor_col:
-            all_sensor_elements.add((eid, min_x, max_x, min_y, max_y, on_sensor_row, on_sensor_col))
-
-    #get the upper leftmost and lower rightmost sensor elements
-    sensors_in_row = [r for r in all_sensor_elements if r[5]]
-    top_left = min(all_sensor_elements, key=lambda r: (r[1], -r[4]))        #highest y then lowest x
-    bottom_right = min(all_sensor_elements, key=lambda c: (c[3], -c[2]))    #lowest y then highest x
-    sensor_elements = {top_left[0], bottom_right[0]}
-
+#Return the sensor elements offset from the top and right boundaries by the # of elements specified by sensor_offset; assuming region's thickness is z=1 
+def define_sensor_elements(node_section, element_section, element_size, outer_dims, sensor_offset): 
+    xf, yf, _ = map(float, outer_dims) 
+    es = float(element_size) 
+    nxf = int(round(xf/es)) 
+    nyf = int(round(yf/es)) 
+    
+    #X and y coordinates of the top and right edges of the sensor elements 
+    sensor_y_coord = (nyf-sensor_offset) * es 
+    sensor_x_coord = (nxf-sensor_offset) * es 
+    
+    #Dictionary to get coordinates from node IDs 
+    nodeID_to_coords = {} 
+    for row in node_section: 
+        node_id = int(row[0]) 
+        nodeID_to_coords[node_id] = tuple(map(float, row[1:4])) 
+    
+    sensor_elements = set() #use set to avoid duplicate elements (e.g., the one where the row and column intersect) 
+    tol = 1e-10 
+    
+    for row in element_section: 
+        eid = int(row[0]) 
+        nids = [int(v) for v in row[2:10]] 
+        x_coords = [nodeID_to_coords[n][0] for n in nids] 
+        y_coords = [nodeID_to_coords[n][1] for n in nids] 
+        
+        on_sensor_row = abs(max(y_coords) - sensor_y_coord) <= tol 
+        on_sensor_col = abs(max(x_coords) - sensor_x_coord) <= tol 
+        
+        if on_sensor_row or on_sensor_col: 
+            sensor_elements.add(eid) 
+        
     return sensor_elements
 
 
