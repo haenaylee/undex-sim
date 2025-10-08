@@ -190,10 +190,9 @@ def define_sensor_elements(node_section, element_section, element_size, outer_di
     return sensor_elements
 
 
-#Return the tracer elements along the bottom boundary (y=0)
+#Return the tracer elements along the bottom boundary and lowest z layer (y=0, z=0)
 def define_tracer_elements(node_section, element_section):
     tracer_elements = set()
-    target_y = 0
     tol = 1e-10
 
     #Dictionary to get coordinates from node IDs
@@ -206,7 +205,8 @@ def define_tracer_elements(node_section, element_section):
         eid = int(row[0])
         nids = [int(r) for r in row[2:10]]
         y_coords = [nodeID_to_coords[n][1] for n in nids]
-        if abs(min(y_coords) - target_y) <= tol:
+        z_coords = [nodeID_to_coords[n][2] for n in nids]
+        if abs(min(y_coords)) <= tol and abs(min(z_coords)) <= tol:
             tracer_elements.add(eid)
 
     return tracer_elements
