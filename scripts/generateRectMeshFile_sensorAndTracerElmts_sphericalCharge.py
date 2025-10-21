@@ -1,5 +1,5 @@
 # Script to generate the mesh file for a rectangular mesh and quarter-spherical charge with sensor and tracer elements for automatic simulation termination
-# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1, inputs except element_size and expl_radius are integers, 
+# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1 cm, inputs except element_size and expl_radius are integers, 
 # part ID of non-explosive is 1 and ID of explosive is 2, region is rectangular
 # Haena Lee, Sept 2025
 
@@ -14,8 +14,8 @@ def generate_nodes(element_size, outer_dims):
     nodes = []
 
     #Check that there are an integer # of elements in the entire region
-    nx_expl = outer_dims[0]/element_size
-    ny_expl = outer_dims[1]/element_size
+    nx_expl = xf/element_size
+    ny_expl = yf/element_size
 
     def is_int(x):  #check if x is an integer within tolerance
         return abs(x-round(x)) <= tol
@@ -26,7 +26,7 @@ def generate_nodes(element_size, outer_dims):
             f"{ny_expl:.2f} elements in the y dimension of the entire region.\n"
             "Please choose a different element size or outer dimensions."
         )
-        return None     #quit early
+        return None
 
     #Convert all lengths to indices, rounding to nearest int
     def to_index(L):
@@ -35,18 +35,14 @@ def generate_nodes(element_size, outer_dims):
     nyf = to_index(yf)
     nzf = to_index(zf)
 
-    def add_node(xi,yi,zi):
-        #append coordinates scaled by element_size
-        nodes.append((xi*element_size, yi*element_size, zi*element_size))
-
     #generate nodes for the entire region, in increasing x, y, z order
     nodes = []
     for k in range(nzf+1):
         for j in range(nyf+1):
             for i in range(nxf+1):
-                x = i * element_size
-                y = j * element_size
-                z = k * element_size
+                x = i*element_size
+                y = j*element_size
+                z = k*element_size
                 nodes.append((x,y,z))
 
     nodes = np.array(nodes, dtype=float)
