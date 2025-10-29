@@ -1,5 +1,5 @@
 # Script to generate the mesh file for a mesh with a cutout region; see https://lsdyna.ansys.com/underwater-f/ for an example
-# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1, bottom edge of cutout region is on the x axis,
+# Assumptions: mesh's bottom left corner is at the origin, thin thickness of z=1 cm, bottom edge of cutout region is on the x axis,
 # inputs except element_size are integers, part ID of non-explosive is 1 and ID of explosive is 2
 # Haena Lee, July 2025
 
@@ -31,7 +31,7 @@ def generate_nodes(element_size, outer_dims, expl_dims, cutout_dims, cutout_offs
     if not (is_int(nx_expl) and is_int(ny_expl)):   #if there's not an integer # of elements
         print(
             f"There are {nx_expl:.2f} elements in the x dimension and "
-            f"{ny_expl:.2f} elements in the y dimension of the explosive region.\n"
+            f"{ny_expl:.2f} elements in the y dimension.\n"
             "Please choose a different element size or explosive dimensions."
         )
         return None     #quit early
@@ -254,7 +254,7 @@ def generate_elements(nodes, element_size, outer_dims, expl_dims, cutout_dims, c
 
 
 #Format the node and element sections into the output file, in the same manner as 'fine.inc'
-def format_sections_into_file(node_section, element_section, output_path):
+def format_sections_into_file(node_section, element_section, sensor_elements, sensor_set_id, output_path):
     with open(output_path, "w") as f:
         f.write("*NODE\n")
         for row in node_section:
@@ -269,7 +269,7 @@ def format_sections_into_file(node_section, element_section, output_path):
         for row in element_section:
             #10 integer fields with width=8
             f.write("".join(f"{val:8d}" for val in row) + "\n")
-        
+
         f.write("*END\n")
 
 
@@ -287,7 +287,7 @@ def main(output_filename, element_size, outer_dims, cutout_dims, cutout_offset, 
 
 #SCRIPT
 if __name__ == '__main__':
-    output_filename = input("Enter output file name (e.g., output.inc): ").strip()
+    output_filename = input("Enter output file name (e.g., mesh.inc): ").strip()
     element_size = float(input("Enter element size (e.g., 1): "))
     
     def get_tuple(prompt):

@@ -298,7 +298,7 @@ def main(output_filename, element_size, outer_dims, expl_radius, fixed_coords, s
 
 #SCRIPT
 if __name__ == '__main__':
-    output_filename = input("Enter output file name (e.g., output.inc): ").strip()
+    output_filename = input("Enter output file name (e.g., mesh.inc): ").strip()
     element_size = float(input("Enter element size (e.g., 0.16): "))
 
     def get_tuple(prompt):
