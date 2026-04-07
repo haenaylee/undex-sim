@@ -1,0 +1,4 @@
+sbatch submitSampleParamSpace.sh 1 (or however many parameters you want to sample)
+
+Then can check the status anytime with:
+squeue -u $USER
