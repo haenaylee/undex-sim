@@ -1,0 +1,3 @@
+﻿Element size (cm),Charge radius (cm),Region x dimension (cm),Region y dimension (cm),Region z dimension (cm),Simulation endtime (µs),Write d3plot every __ µs,Write glstat every __ µs,Write elout every __ µs,Write nodout every __ µs,
+,,,,,,,,,,
+Model name,A (Mbar),B (Mbar),R1,R2,ω,ρ0 (g/cm^3),e0 (cm/μs^2),PCJ (Mbar),D (cm/μs),Job ID
